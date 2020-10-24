@@ -1,4 +1,10 @@
 #!/bin/bash
+READLINK=readlink
+which greadlink && READLINK=greadlink
+
+project_dir=$($READLINK -f "$(dirname $0)")
+echo $project_dir
+cd $project_dir
 
 jetty=jetty-distribution-9.4.32.v20200930
 if [ ! -f $jetty.zip ];
@@ -63,7 +69,7 @@ grep -v "$provmeta_closing_tag" $provider_meta > tmp && mv tmp $provider_meta
 cat >> $provider_meta <<EOF
     <MetadataProvider id="sp-metadata"
                   xsi:type="FilesystemMetadataProvider"
-                  metadataFile="C:/Users/pkovacs/chemaxon/git/pkovacs/ml-work/data/config/saml/sp-provider.xml"/>
+                  metadataFile="${HOME}/chemaxon/git/pkovacs/ml-work/data/config/saml/sp-provider.xml"/>
 EOF
 echo $provmeta_closing_tag >> $provider_meta
 
@@ -75,19 +81,32 @@ sed -i -e 's|<secure>true</secure>|<secure>false</secure>|' $shibidp/webapp/WEB-
 ###############################################################################
 # WAR
 ###############################################################################
+cat >> shibb-idp-install.properties <<EOF
+idp.src.dir=$project_dir/shibboleth-identity-provider-3.4.7
+idp.target.dir=$project_dir/idp
+EOF
+
 cd $shibidp/bin
-cmd.exe //C install.bat -propertyfile ..\\..\\shibb-idp-install.properties
+if which "cmd.exe";
+then
+    cmd.exe //C install.bat -propertyfile ..\\..\\shibb-idp-install.properties
+else
+    bash install.sh -propertyfile ../../shibb-idp-install.properties
+fi
 cd -
 cp idp/war/idp.war $jetty/webapps/
 
 ###############################################################################
 # $jetty/start.ini
 ###############################################################################
+mkdir -p ${HOME}/tmp/shibboleth
 cat >> $jetty/start.ini <<EOF
 --exec
 -XX:+UseG1GC
 -Xmx1500m
 -Djava.security.egd=file:/dev/urandom
--Djava.io.tmpdir=C:/Users/pkovacs/tmp
--Didp.home=C:/Users/pkovacs/github/pdkovacs/shib-testidp-docker/idp
+-Djava.io.tmpdir=${HOME}/tmp/shibboleth
+-Didp.home=$project_dir/idp
 EOF
+
+cp idp/war/idp.war $jetty/webapp
